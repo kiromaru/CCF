@@ -40,6 +40,13 @@ namespace ccf
     NodeSignature(const NodeId& node_) : node(node_) {}
     NodeSignature() = default;
 
+    void operator=(const NodeSignature& o)
+    {
+      sig = o.sig;
+      node = o.node;
+      hashed_nonce = o.hashed_nonce;
+    }
+
     bool operator==(const NodeSignature& o) const
     {
       return sig == o.sig && hashed_nonce == o.hashed_nonce;

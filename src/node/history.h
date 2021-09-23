@@ -23,7 +23,8 @@
 #define HAVE_MBEDTLS
 // merklecpp traces are off by default, even when CCF tracing is enabled
 // #include "merklecpp_trace.h"
-#include <merklecpp/merklecpp.h>
+//#include <merklecpp/merklecpp.h>
+#include "oZKS/ozks.h"
 
 namespace fmt
 {
@@ -218,13 +219,14 @@ namespace ccf
     }
   };
 
-  typedef merkle::TreeT<32, merkle::sha256_openssl> HistoryTree;
+  //typedef merkle::TreeT<32, merkle::sha256_openssl> HistoryTree;
+  typedef ozks::OZKS HistoryTree;
 
   class Proof
   {
   private:
-    HistoryTree::Hash root;
-    std::shared_ptr<HistoryTree::Path> path = nullptr;
+    ozks::commitment_type root;
+    std::shared_ptr<ozks::lookup_path_type> path = nullptr;
 
   public:
     Proof() {}
@@ -233,15 +235,15 @@ namespace ccf
     {
       size_t position = 0;
       root.deserialise(v, position);
-      path = std::make_shared<HistoryTree::Path>(v, position);
+      path = std::make_shared<ozks::lookup_path_type>(v, position);
     }
 
-    const HistoryTree::Hash& get_root() const
+    const ozks::commitment_type& get_root() const
     {
       return root;
     }
 
-    std::shared_ptr<HistoryTree::Path> get_path()
+    std::shared_ptr<ozks::lookup_path_type> get_path()
     {
       return path;
     }

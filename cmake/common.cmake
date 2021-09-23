@@ -84,6 +84,11 @@ find_package(MbedTLS REQUIRED)
 set(CLIENT_MBEDTLS_INCLUDE_DIR "${MBEDTLS_INCLUDE_DIRS}")
 set(CLIENT_MBEDTLS_LIBRARIES "${MBEDTLS_LIBRARIES}")
 
+find_package(OZKS 0.1.0 REQUIRED)
+
+find_package(Flatbuffers REQUIRED)
+find_package(Microsoft.GSL 3 REQUIRED)
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tools.cmake)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/tools.cmake DESTINATION cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ccf_app.cmake)
@@ -175,7 +180,7 @@ set(CCF_ENDPOINTS_SOURCES
 find_library(CRYPTO_LIBRARY crypto)
 
 list(APPEND COMPILE_LIBCXX -stdlib=libc++)
-list(APPEND LINK_LIBCXX -lc++ -lc++abi -lc++fs -stdlib=libc++)
+list(APPEND LINK_LIBCXX -lc++ -lc++abi -stdlib=libc++)
 
 include(${CCF_DIR}/cmake/crypto.cmake)
 include(${CCF_DIR}/cmake/quickjs.cmake)
@@ -284,7 +289,7 @@ add_executable(
 )
 target_link_libraries(
   scenario_perf_client PRIVATE ${CMAKE_THREAD_LIBS_INIT} http_parser.host
-                               ccfcrypto.host c++fs
+                               ccfcrypto.host
 )
 install(TARGETS scenario_perf_client DESTINATION bin)
 
@@ -307,6 +312,7 @@ install(
 # CCF endpoints libs
 add_enclave_library(ccf_endpoints.enclave "${CCF_ENDPOINTS_SOURCES}")
 use_oe_mbedtls(ccf_endpoints.enclave)
+target_link_libraries(ccf_endpoints.enclave PRIVATE OZKS::ozks Microsoft.GSL::GSL)
 add_warning_checks(ccf_endpoints.enclave)
 install(
   TARGETS ccf_endpoints.enclave
@@ -315,6 +321,7 @@ install(
 )
 add_host_library(ccf_endpoints.host "${CCF_ENDPOINTS_SOURCES}")
 use_client_mbedtls(ccf_endpoints.host)
+target_link_libraries(ccf_endpoints.host PRIVATE OZKS::ozks Microsoft.GSL::GSL)
 add_san(ccf_endpoints.host)
 add_warning_checks(ccf_endpoints.host)
 install(
