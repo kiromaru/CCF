@@ -24,7 +24,7 @@
 // merklecpp traces are off by default, even when CCF tracing is enabled
 // #include "merklecpp_trace.h"
 //#include <merklecpp/merklecpp.h>
-#include "oZKS/ozks.h"
+#include "history_adapter.h"
 
 namespace fmt
 {
@@ -220,13 +220,13 @@ namespace ccf
   };
 
   //typedef merkle::TreeT<32, merkle::sha256_openssl> HistoryTree;
-  typedef ozks::OZKS HistoryTree;
+  typedef HistoryTreeAdapter HistoryTree;
 
   class Proof
   {
   private:
-    ozks::commitment_type root;
-    std::shared_ptr<ozks::lookup_path_type> path = nullptr;
+    HistoryTree::Hash root;
+    std::shared_ptr<HistoryTree::Path> path = nullptr;
 
   public:
     Proof() {}
@@ -235,15 +235,15 @@ namespace ccf
     {
       size_t position = 0;
       root.deserialise(v, position);
-      path = std::make_shared<ozks::lookup_path_type>(v, position);
+      path = std::make_shared<HistoryTree::Path>(v, position);
     }
 
-    const ozks::commitment_type& get_root() const
+    const HistoryTree::Hash& get_root() const
     {
       return root;
     }
 
-    std::shared_ptr<ozks::lookup_path_type> get_path()
+    std::shared_ptr<HistoryTree::Path> get_path()
     {
       return path;
     }
@@ -385,7 +385,7 @@ namespace ccf
 
     MerkleTreeHistory(crypto::Sha256Hash first_hash = {})
     {
-      tree = new HistoryTree(merkle::Hash(first_hash.h));
+      tree = new HistoryTree(HistoryTree::Hash(first_hash.h));
     }
 
     ~MerkleTreeHistory()
@@ -402,12 +402,12 @@ namespace ccf
 
     void append(crypto::Sha256Hash& hash)
     {
-      tree->insert(merkle::Hash(hash.h));
+      tree->insert(HistoryTree::Hash(hash.h));
     }
 
     crypto::Sha256Hash get_root() const
     {
-      const merkle::Hash& root = tree->root();
+      const HistoryTree::Hash& root = tree->root();
       crypto::Sha256Hash result;
       std::copy(root.bytes, root.bytes + root.size(), result.h.begin());
       return result;
@@ -417,7 +417,7 @@ namespace ccf
     {
       delete (tree);
       crypto::Sha256Hash root(rhs.get_root());
-      tree = new HistoryTree(merkle::Hash(root.h));
+      tree = new HistoryTree(HistoryTree::Hash(root.h));
     }
 
     void flush(uint64_t index)
@@ -491,7 +491,7 @@ namespace ccf
 
     crypto::Sha256Hash get_leaf(uint64_t index)
     {
-      const merkle::Hash& leaf = tree->leaf(index);
+      const HistoryTree::Hash& leaf = tree->leaf(index);
       crypto::Sha256Hash result;
       std::copy(leaf.bytes, leaf.bytes + leaf.size(), result.h.begin());
       return result;
