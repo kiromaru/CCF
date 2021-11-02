@@ -66,7 +66,7 @@ function(add_warning_checks name)
     ${name}
     PRIVATE -Wall
             -Wextra
-            -Werror
+#            -Werror
             -Wundef
             -Wpedantic
             -Wno-unused

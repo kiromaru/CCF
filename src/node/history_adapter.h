@@ -53,12 +53,17 @@ namespace ccf {
             
             Hash(const std::array<std::uint8_t, HASH_SIZE>& hash)
             {
-                memcpy(bytes, hash.data(), hash.size());
+                *this = hash;
             }
 
             Hash()
             {
                 memset(bytes, 0, HASH_SIZE);
+            }
+
+            Hash(const Hash &other)
+            {
+                *this = other;
             }
 
             void serialise(std::vector<std::uint8_t>& v) const
@@ -80,6 +85,18 @@ namespace ccf {
             bool operator==(const Hash& other) const
             {
                 return (0 == memcmp(bytes, other.bytes, HASH_SIZE));
+            }
+
+            Hash& operator=(const Hash& other)
+            {
+                memcpy(bytes, other.bytes, HASH_SIZE);
+                return *this;
+            }
+
+            Hash& operator=(const std::array<std::uint8_t, HASH_SIZE>& other)
+            {
+                memcpy(bytes, other.data(), HASH_SIZE);
+                return *this;
             }
 
             std::string to_string() const
@@ -177,19 +194,21 @@ namespace ccf {
             std::list<Element> elements_;
         };
 
-        HistoryTreeAdapter(const std::vector<std::uint8_t>& v)
+        HistoryTreeAdapter(const std::vector<std::uint8_t>& v) : tree_(ozks::OZKSConfig { false, false })
         {
             deserialise(v);
         }
 
-        HistoryTreeAdapter(const Hash& hash)
+        HistoryTreeAdapter(const Hash& hash) : tree_(ozks::OZKSConfig { false, false })
         {
             insert(hash);
         }
 
-        const Hash root() const
+        Hash root() const
         {
-            return get_root();
+            Hash result;
+            get_root(result);
+            return result;
         }
 
         std::shared_ptr<Hash> past_root(size_t index) const
@@ -198,7 +217,9 @@ namespace ccf {
                 throw std::runtime_error("Invalid index");
 
             ozks::commitment_type commitment = previous_roots_[index];
-            return std::make_shared<Hash>(get_root(commitment));
+            Hash root;
+            get_root(commitment, root);
+            return std::make_shared<Hash>(root);
         }
 
         const Hash leaf(size_t index) const
@@ -216,7 +237,11 @@ namespace ccf {
 
         void retract_to(size_t index)
         {
+            if (index >= leaves_.size())
+                throw std::invalid_argument("Index is bigger than existing leaves");
 
+            leaves_.resize(index + 1);
+            previous_roots_.resize(index + 1);
         }
 
         std::shared_ptr<Path> path(size_t index) const
@@ -245,6 +270,7 @@ namespace ccf {
 
             ozks::Commitment commitment = tree_.get_commitment();
             previous_roots_.push_back(commitment.root_commitment);
+            //get_root(commitment.root_commitment, root_hash_);
         }
 
         void serialise(std::vector<std::uint8_t>& v) const
@@ -263,6 +289,9 @@ namespace ccf {
                 serialise_u64(previous_roots_[idx].size(), v);
                 serialise_bytearray(reinterpret_cast<const std::uint8_t*>(previous_roots_[idx].data()), previous_roots_[idx].size(), v);
             }
+
+            // Save current root
+            //root_hash_.serialise(v);
         }
 
         void serialise(std::size_t from, std::size_t to, std::vector<std::uint8_t>& v) const
@@ -305,25 +334,26 @@ namespace ccf {
 
                 previous_roots_.push_back(commitment);
             }
+
+            // Read current root
+            //root_hash_.deserialise(v, position);
         }
 
     private:
         ozks::OZKS tree_;
         std::vector<Hash> leaves_;
         std::vector<ozks::commitment_type> previous_roots_;
+        //Hash root_hash_;
 
-        Hash get_root() const
+        void get_root(Hash& hash) const
         {
-            Hash root;
             ozks::Commitment commitment = tree_.get_commitment();
-            return get_root(commitment.root_commitment);
+            get_root(commitment.root_commitment, hash);
         }
 
-        Hash get_root(const ozks::commitment_type& commitment) const
+        void get_root(const ozks::commitment_type& commitment, Hash& hash) const
         {
-            Hash root;
-            memcpy(root.bytes, commitment.data(), Hash::HASH_SIZE);
-            return root;
+            memcpy(hash.bytes, commitment.data(), Hash::HASH_SIZE);
         }
     };
 }

@@ -309,10 +309,21 @@ install(
   DESTINATION lib
 )
 
+get_target_property(OZKS_INCLUDES OZKS::ozks INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(OZKS_COMPILE_OPTIONS OZKS::ozks INTERFACE_COMPILE_OPTIONS)
+get_target_property(OZKS_COMPILE_OPTIONS_ENCLAVE OZKS::ozks.enclave INTERFACE_COMPILE_OPTIONS)
+get_target_property(OZKS_LIBRARIES OZKS::ozks INTERFACE_LINK_LIBRARIES)
+get_target_property(OZKS_LIBRARIES_ENCLAVE OZKS::ozks.enclave INTERFACE_LINK_LIBRARIES)
+message(STATUS "OZKS libs: ${OZKS_LIBRARIES}")
+message(STATUS "OZKS enc libs: ${OZKS_LIBRARIES_ENCLAVE}")
+message(STATUS "OZKS includes: ${OZKS_INCLUDES}")
+
 # CCF endpoints libs
 add_enclave_library(ccf_endpoints.enclave "${CCF_ENDPOINTS_SOURCES}")
+target_link_libraries(ccf_endpoints.enclave PRIVATE Microsoft.GSL::GSL)
+target_include_directories(ccf_endpoints.enclave AFTER PUBLIC ${OZKS_INCLUDES} /usr/local/include)
+target_compile_options(ccf_endpoints.enclave PRIVATE ${OZKS_COMPILE_OPTIONS_ENCLAVE})
 use_oe_mbedtls(ccf_endpoints.enclave)
-target_link_libraries(ccf_endpoints.enclave PRIVATE OZKS::ozks Microsoft.GSL::GSL)
 add_warning_checks(ccf_endpoints.enclave)
 install(
   TARGETS ccf_endpoints.enclave
@@ -321,7 +332,9 @@ install(
 )
 add_host_library(ccf_endpoints.host "${CCF_ENDPOINTS_SOURCES}")
 use_client_mbedtls(ccf_endpoints.host)
-target_link_libraries(ccf_endpoints.host PRIVATE OZKS::ozks Microsoft.GSL::GSL)
+target_compile_options(ccf_endpoints.host PRIVATE ${OZKS_COMPILE_OPTIONS})
+target_include_directories(ccf_endpoints.host AFTER PUBLIC ${OZKS_INCLUDES} /usr/local/include)
+target_link_libraries(ccf_endpoints.host PRIVATE Microsoft.GSL::GSL)
 add_san(ccf_endpoints.host)
 add_warning_checks(ccf_endpoints.host)
 install(
@@ -599,7 +612,7 @@ function(add_picobench name)
 
   target_link_libraries(
     ${name} PRIVATE ${CMAKE_THREAD_LIBS_INIT} ${PARSED_ARGS_LINK_LIBS}
-                    ccfcrypto.host
+                    ccfcrypto.host OZKS::ozks Microsoft.GSL::GSL
   )
 
   # -Wall -Werror catches a number of warnings in picobench

@@ -84,7 +84,7 @@ if("sgx" IN_LIST COMPILE_TARGETS)
     ccf.enclave PUBLIC INSIDE_ENCLAVE _LIBCPP_HAS_THREAD_API_PTHREAD
   )
 
-  target_compile_options(ccf.enclave PUBLIC -nostdinc -nostdinc++)
+  target_compile_options(ccf.enclave PUBLIC -nostdinc -nostdinc++ ${OZKS_COMPILE_OPTIONS_ENCLAVE})
   add_warning_checks(ccf.enclave)
 
   target_include_directories(
@@ -108,6 +108,9 @@ if("sgx" IN_LIST COMPILE_TARGETS)
            aft.enclave
            sss.enclave
            ccf_endpoints.enclave
+#           ${OZKS_LIBRARIES_ENCLAVE}
+           Microsoft.GSL::GSL
+           OZKS::ozks.enclave
   )
 
   set_property(TARGET ccf.enclave PROPERTY POSITION_INDEPENDENT_CODE ON)
@@ -134,7 +137,7 @@ if("virtual" IN_LIST COMPILE_TARGETS)
                        _LIBCPP_HAS_THREAD_API_PTHREAD
   )
 
-  target_compile_options(ccf.virtual PUBLIC ${COMPILE_LIBCXX})
+  target_compile_options(ccf.virtual PUBLIC ${COMPILE_LIBCXX} ${OZKS_COMPILE_OPTIONS})
   add_warning_checks(ccf.virtual)
 
   target_include_directories(
@@ -159,7 +162,10 @@ if("virtual" IN_LIST COMPILE_TARGETS)
            sss.host
            ccf_endpoints.host
            openenclave::oehost
+#           ${OZKS_LIBRARIES}
            ${CMAKE_THREAD_LIBS_INIT}
+           Microsoft.GSL::GSL
+           OZKS::ozks
   )
 
   set_property(TARGET ccf.virtual PROPERTY POSITION_INDEPENDENT_CODE ON)
@@ -275,7 +281,7 @@ if(BUILD_TESTS)
       ${CMAKE_CURRENT_SOURCE_DIR}/src/kv/test/kv_dynamic_tables.cpp
     )
     target_link_libraries(
-      kv_test PRIVATE ${CMAKE_THREAD_LIBS_INIT} http_parser.host
+      kv_test PRIVATE ${CMAKE_THREAD_LIBS_INIT} http_parser.host OZKS::ozks Microsoft.GSL::GSL
     )
 
     add_unit_test(
@@ -318,7 +324,7 @@ if(BUILD_TESTS)
     add_unit_test(
       history_test ${CMAKE_CURRENT_SOURCE_DIR}/src/node/test/history.cpp
     )
-    target_link_libraries(history_test PRIVATE ccfcrypto.host http_parser.host)
+    target_link_libraries(history_test PRIVATE ccfcrypto.host http_parser.host OZKS::ozks Microsoft.GSL::GSL)
 
     add_unit_test(
       progress_tracker_test
@@ -342,13 +348,13 @@ if(BUILD_TESTS)
       ${CMAKE_CURRENT_SOURCE_DIR}/src/node/test/historical_queries.cpp
     )
     target_link_libraries(
-      historical_queries_test PRIVATE http_parser.host sss.host
+      historical_queries_test PRIVATE http_parser.host sss.host OZKS::ozks Microsoft.GSL::GSL
     )
 
     add_unit_test(
       snapshot_test ${CMAKE_CURRENT_SOURCE_DIR}/src/node/test/snapshot.cpp
     )
-    target_link_libraries(snapshot_test PRIVATE)
+    target_link_libraries(snapshot_test PRIVATE OZKS::ozks Microsoft.GSL::GSL)
 
     add_unit_test(
       snapshotter_test
@@ -386,6 +392,7 @@ if(BUILD_TESTS)
     target_link_libraries(
       frontend_test PRIVATE ${CMAKE_THREAD_LIBS_INIT} http_parser.host sss.host
                             ccf_endpoints.host quickjs.host
+                            OZKS::ozks Microsoft.GSL::GSL
     )
 
     add_unit_test(
@@ -400,6 +407,7 @@ if(BUILD_TESTS)
     target_link_libraries(
       proposal_id_test PRIVATE ${CMAKE_THREAD_LIBS_INIT} http_parser.host
                                sss.host ccf_endpoints.host quickjs.host
+                               OZKS::ozks Microsoft.GSL::GSL
     )
 
     add_unit_test(
@@ -409,17 +417,19 @@ if(BUILD_TESTS)
     target_link_libraries(
       node_frontend_test PRIVATE ${CMAKE_THREAD_LIBS_INIT} http_parser.host
                                  sss.host ccf_endpoints.host
+                                 OZKS::ozks Microsoft.GSL::GSL
     )
 
     add_unit_test(
       merkle_test ${CMAKE_CURRENT_SOURCE_DIR}/src/node/test/merkle_test.cpp
     )
+    target_link_libraries(merkle_test PRIVATE OZKS::ozks Microsoft.GSL::GSL)
 
     # Merkle Tree memory test
     add_executable(merkle_mem src/node/test/merkle_mem.cpp)
     target_compile_options(merkle_mem PRIVATE ${COMPILE_LIBCXX})
     target_link_libraries(
-      merkle_mem PRIVATE ${CMAKE_THREAD_LIBS_INIT} ${LINK_LIBCXX} crypto
+      merkle_mem PRIVATE ${CMAKE_THREAD_LIBS_INIT} ${LINK_LIBCXX} crypto OZKS::ozks Microsoft.GSL::GSL
     )
 
     # Raft driver and scenario test
