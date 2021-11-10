@@ -8,6 +8,7 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
+#include <list>
 
 #include "oZKS/ozks.h"
 
@@ -145,34 +146,36 @@ namespace ccf {
             } Element;
 
 
-            Path(const std::vector<std::uint8_t>& bytes, size_t& position)
+            Path(const std::vector<std::uint8_t>& bytes, std::size_t& position)
             {
-
+                deserialise(bytes, position);
             }
 
             Path()
             {
-
             }
 
-            size_t max_index() const
-            {
-                return 0;
-            }
+            // size_t max_index() const
+            // {
+            //     return 0;
+            // }
 
             bool verify(const Hash& root) const
             {
                 return false;
             }
 
-            const Hash leaf() const
-            {
-                return Hash();
-            }
+            // const Hash leaf() const
+            // {
+            //     return Hash();
+            // }
 
             void serialise(std::vector<std::uint8_t>& v) const
             {
+            }
 
+            void deserialise(const std::vector<std::uint8_t>& v, std::size_t& position)
+            {
             }
 
             /// @brief Iterator for path elements
@@ -188,6 +191,11 @@ namespace ccf {
             const_iterator end() const
             {
                 return elements_.end();
+            }
+
+            static std::shared_ptr<Path> from_query_result(const ozks::QueryResult& query_result)
+            {
+                return std::make_shared<Path>();
             }
 
         private:
@@ -232,7 +240,6 @@ namespace ccf {
 
         void flush_to(size_t index)
         {
-
         }
 
         void retract_to(size_t index)
@@ -246,7 +253,18 @@ namespace ccf {
 
         std::shared_ptr<Path> path(size_t index) const
         {
-            return std::make_shared<Path>();
+            if (index >= leaves_.size())
+                throw std::invalid_argument("Index is bigger than existing leaves");
+
+            Hash hash = leaves_[index];
+            ozks::key_type key;
+            hash.to_key(key);
+
+            ozks::QueryResult result = tree_.query(key);
+            if (!result.is_member)
+                throw std::runtime_error("A valid index should be present in tree");
+
+            return Path::from_query_result(result);
         }
 
         size_t max_index() const
