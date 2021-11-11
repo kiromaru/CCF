@@ -10,11 +10,12 @@
     }
   ],
   "configurations": [
+
     {
       "name": "(gdb) Launch",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/merkle_test",
+      "program": "${workspaceFolder}/build/history_test",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",

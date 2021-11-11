@@ -75,12 +75,14 @@ namespace ccf {
                 }
             }
 
-            void deserialise(const std::vector<std::uint8_t>& v, size_t position)
+            void deserialise(const std::vector<std::uint8_t>& v, size_t& position)
             {
                 for (size_t i = 0; i < HASH_SIZE; i++)
                 {
                     bytes[i] = v[i + position];
                 }
+
+                position += HASH_SIZE;
             }
 
             bool operator==(const Hash& other) const
@@ -147,22 +149,32 @@ namespace ccf {
 
 
             Path(const std::vector<std::uint8_t>& bytes, std::size_t& position)
+                : query_result_(ozks::QueryResult(ozks::OZKSConfig { false, false}))
             {
                 deserialise(bytes, position);
             }
 
             Path()
+                : query_result_(ozks::QueryResult(ozks::OZKSConfig { false, false }))
             {
             }
 
-            // size_t max_index() const
-            // {
-            //     return 0;
-            // }
+            Path(const ozks::QueryResult &query_result, const ozks::Commitment &commitment)
+                : query_result_(query_result), commitment_(commitment), elements_({}) 
+            {
+            }
+
+            size_t max_index() const
+            {
+                return 0;
+            }
 
             bool verify(const Hash& root) const
             {
-                return false;
+                ozks::key_type key;
+                root.to_key(key);
+
+                return query_result_.verify(key, commitment_);
             }
 
             // const Hash leaf() const
@@ -172,10 +184,20 @@ namespace ccf {
 
             void serialise(std::vector<std::uint8_t>& v) const
             {
+                query_result_.save(v);
+                commitment_.save(v);
             }
 
             void deserialise(const std::vector<std::uint8_t>& v, std::size_t& position)
             {
+                elements_.clear();
+
+                std::size_t read = ozks::QueryResult::load(query_result_, v, position);
+                position += read;
+
+                auto commitment = ozks::Commitment::load(v, position);
+                commitment_ = commitment.first;
+                position += commitment.second;
             }
 
             /// @brief Iterator for path elements
@@ -193,13 +215,15 @@ namespace ccf {
                 return elements_.end();
             }
 
-            static std::shared_ptr<Path> from_query_result(const ozks::QueryResult& query_result)
+            static std::shared_ptr<Path> from_query_result(const ozks::QueryResult& query_result, const ozks::Commitment &commitment)
             {
-                return std::make_shared<Path>();
+                return std::make_shared<Path>(query_result, commitment);
             }
 
         private:
             std::list<Element> elements_;
+            ozks::QueryResult query_result_;
+            ozks::Commitment commitment_;
         };
 
         HistoryTreeAdapter(const std::vector<std::uint8_t>& v) : tree_(ozks::OZKSConfig { false, false })
@@ -221,10 +245,10 @@ namespace ccf {
 
         std::shared_ptr<Hash> past_root(size_t index) const
         {
-            if (index >= previous_roots_.size())
+            if (index >= previous_commitments_.size())
                 throw std::runtime_error("Invalid index");
 
-            ozks::commitment_type commitment = previous_roots_[index];
+            ozks::Commitment commitment = previous_commitments_[index];
             Hash root;
             get_root(commitment, root);
             return std::make_shared<Hash>(root);
@@ -248,7 +272,7 @@ namespace ccf {
                 throw std::invalid_argument("Index is bigger than existing leaves");
 
             leaves_.resize(index + 1);
-            previous_roots_.resize(index + 1);
+            previous_commitments_.resize(index + 1);
         }
 
         std::shared_ptr<Path> path(size_t index) const
@@ -256,6 +280,7 @@ namespace ccf {
             if (index >= leaves_.size())
                 throw std::invalid_argument("Index is bigger than existing leaves");
 
+            ozks::Commitment commitment = previous_commitments_[index];
             Hash hash = leaves_[index];
             ozks::key_type key;
             hash.to_key(key);
@@ -264,7 +289,7 @@ namespace ccf {
             if (!result.is_member)
                 throw std::runtime_error("A valid index should be present in tree");
 
-            return Path::from_query_result(result);
+            return Path::from_query_result(result, commitment);
         }
 
         size_t max_index() const
@@ -287,7 +312,7 @@ namespace ccf {
             leaves_.push_back(hash);
 
             ozks::Commitment commitment = tree_.get_commitment();
-            previous_roots_.push_back(commitment.root_commitment);
+            previous_commitments_.push_back(commitment);
             //get_root(commitment.root_commitment, root_hash_);
         }
 
@@ -302,10 +327,9 @@ namespace ccf {
             }
 
             // Save past roots vector
-            serialise_u64(previous_roots_.size(), v);
-            for (std::size_t idx = 0; idx < previous_roots_.size(); idx++) {
-                serialise_u64(previous_roots_[idx].size(), v);
-                serialise_bytearray(reinterpret_cast<const std::uint8_t*>(previous_roots_[idx].data()), previous_roots_[idx].size(), v);
+            serialise_u64(previous_commitments_.size(), v);
+            for (std::size_t idx = 0; idx < previous_commitments_.size(); idx++) {
+                previous_commitments_[idx].save(v);
             }
 
             // Save current root
@@ -322,9 +346,9 @@ namespace ccf {
         {
             tree_.clear();
             leaves_.clear();
-            previous_roots_.clear();
+            previous_commitments_.clear();
 
-            std::size_t position = tree_.load(v, tree_);
+            std::size_t position = tree_.load(tree_, v);
 
             // Read leaves
             std::size_t leaves_size = deserialise_u64(v, position);
@@ -339,18 +363,13 @@ namespace ccf {
             }
 
             // Read previous roots
-            std::size_t previous_roots_size = deserialise_u64(v, position);
+            std::size_t previous_commitments_size = deserialise_u64(v, position);
             position += sizeof(uint64_t);
 
-            for (std::size_t idx = 0; idx < previous_roots_size; idx++) {
-                std::size_t cmt_size = deserialise_u64(v, position);
-                position += sizeof(uint64_t);
-
-                ozks::commitment_type commitment(cmt_size);
-                deserialise_bytearray(reinterpret_cast<uint8_t*>(commitment.data()), cmt_size, v, position);
-                position += cmt_size;
-
-                previous_roots_.push_back(commitment);
+            for (std::size_t idx = 0; idx < previous_commitments_size; idx++) {
+                auto commitment = ozks::Commitment::load(v, position);
+                position += commitment.second;
+                previous_commitments_.push_back(commitment.first);
             }
 
             // Read current root
@@ -360,18 +379,18 @@ namespace ccf {
     private:
         ozks::OZKS tree_;
         std::vector<Hash> leaves_;
-        std::vector<ozks::commitment_type> previous_roots_;
+        std::vector<ozks::Commitment> previous_commitments_;
         //Hash root_hash_;
 
         void get_root(Hash& hash) const
         {
             ozks::Commitment commitment = tree_.get_commitment();
-            get_root(commitment.root_commitment, hash);
+            get_root(commitment, hash);
         }
 
-        void get_root(const ozks::commitment_type& commitment, Hash& hash) const
+        void get_root(const ozks::Commitment& commitment, Hash& hash) const
         {
-            memcpy(hash.bytes, commitment.data(), Hash::HASH_SIZE);
+            memcpy(hash.bytes, commitment.root_commitment.data(), Hash::HASH_SIZE);
         }
     };
 }
