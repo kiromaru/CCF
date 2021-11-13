@@ -27,16 +27,18 @@ namespace {
         memcpy(v.data() + original_size, bytes, size);
     }
 
-    std::uint64_t deserialise_u64(const std::vector<std::uint8_t>& v, std::size_t position)
+    std::uint64_t deserialise_u64(const std::vector<std::uint8_t>& v, std::size_t& position)
     {
         std::uint64_t result = 0;
         memcpy(&result, v.data() + position, sizeof(uint64_t));
+        position += sizeof(uint64_t);
         return result;
     }
 
-    void deserialise_bytearray(std::uint8_t* bytes, std::size_t size, const std::vector<std::uint8_t>& v, std::size_t position)
+    void deserialise_bytearray(std::uint8_t* bytes, std::size_t size, const std::vector<std::uint8_t>& v, std::size_t& position)
     {
         memcpy(bytes, v.data() + position, size);
+        position += size;
     }
 }
 
@@ -159,14 +161,17 @@ namespace ccf {
             {
             }
 
-            Path(const ozks::QueryResult &query_result, const ozks::Commitment &commitment)
-                : query_result_(query_result), commitment_(commitment), elements_({}) 
+            Path(const ozks::QueryResult &query_result,
+                 const ozks::Commitment &commitment,
+                 std::size_t max_index,
+                 const Hash leaf)
+                : elements_({}), query_result_(query_result), commitment_(commitment), max_index_(max_index), leaf_(leaf)
             {
             }
 
-            size_t max_index() const
+            std::size_t max_index() const
             {
-                return 0;
+                return max_index_;
             }
 
             bool verify(const Hash& root) const
@@ -177,17 +182,18 @@ namespace ccf {
                 return query_result_.verify(key, commitment_);
             }
 
-            // const Hash leaf() const
-            // {
-            //     return Hash();
-            // }
+            const Hash leaf() const
+            {
+                return leaf_;
+            }
 
             void serialise(std::vector<std::uint8_t>& v) const
             {
                 query_result_.save(v);
                 commitment_.save(v);
+                serialise_u64(max_index_, v);
             }
-
+            
             void deserialise(const std::vector<std::uint8_t>& v, std::size_t& position)
             {
                 elements_.clear();
@@ -198,6 +204,8 @@ namespace ccf {
                 auto commitment = ozks::Commitment::load(v, position);
                 commitment_ = commitment.first;
                 position += commitment.second;
+
+                max_index_ = deserialise_u64(v, position);
             }
 
             /// @brief Iterator for path elements
@@ -215,15 +223,21 @@ namespace ccf {
                 return elements_.end();
             }
 
-            static std::shared_ptr<Path> from_query_result(const ozks::QueryResult& query_result, const ozks::Commitment &commitment)
+            static std::shared_ptr<Path> from_query_result(
+                const ozks::QueryResult& query_result,
+                const ozks::Commitment &commitment,
+                std::size_t max_index,
+                const Hash& leaf)
             {
-                return std::make_shared<Path>(query_result, commitment);
+                return std::make_shared<Path>(query_result, commitment, max_index, leaf);
             }
 
         private:
             std::list<Element> elements_;
             ozks::QueryResult query_result_;
             ozks::Commitment commitment_;
+            std::size_t max_index_;
+            Hash leaf_;
         };
 
         HistoryTreeAdapter(const std::vector<std::uint8_t>& v) : tree_(ozks::OZKSConfig { false, false })
@@ -280,7 +294,7 @@ namespace ccf {
             if (index >= leaves_.size())
                 throw std::invalid_argument("Index is bigger than existing leaves");
 
-            ozks::Commitment commitment = previous_commitments_[index];
+            ozks::Commitment commitment = tree_.get_commitment();
             Hash hash = leaves_[index];
             ozks::key_type key;
             hash.to_key(key);
@@ -289,7 +303,7 @@ namespace ccf {
             if (!result.is_member)
                 throw std::runtime_error("A valid index should be present in tree");
 
-            return Path::from_query_result(result, commitment);
+            return Path::from_query_result(result, commitment, index, hash);
         }
 
         size_t max_index() const
@@ -352,19 +366,15 @@ namespace ccf {
 
             // Read leaves
             std::size_t leaves_size = deserialise_u64(v, position);
-            position += sizeof(uint64_t);
 
             for (std::size_t idx = 0; idx < leaves_size; idx++) {
                 Hash hash;
                 deserialise_bytearray(hash.bytes, Hash::HASH_SIZE, v, position);
-                position += Hash::HASH_SIZE;
-
                 leaves_.push_back(hash);
             }
 
             // Read previous roots
             std::size_t previous_commitments_size = deserialise_u64(v, position);
-            position += sizeof(uint64_t);
 
             for (std::size_t idx = 0; idx < previous_commitments_size; idx++) {
                 auto commitment = ozks::Commitment::load(v, position);
