@@ -300,7 +300,7 @@ namespace ccf {
             hash.to_key(key);
 
             ozks::QueryResult result = tree_.query(key);
-            if (!result.is_member)
+            if (!result.is_member())
                 throw std::runtime_error("A valid index should be present in tree");
 
             return Path::from_query_result(result, commitment, index, hash);
@@ -400,7 +400,7 @@ namespace ccf {
 
         void get_root(const ozks::Commitment& commitment, Hash& hash) const
         {
-            memcpy(hash.bytes, commitment.root_commitment.data(), Hash::HASH_SIZE);
+            memcpy(hash.bytes, commitment.root_commitment().data(), Hash::HASH_SIZE);
         }
     };
 }
