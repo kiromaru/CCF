@@ -84,7 +84,7 @@ find_package(MbedTLS REQUIRED)
 set(CLIENT_MBEDTLS_INCLUDE_DIR "${MBEDTLS_INCLUDE_DIRS}")
 set(CLIENT_MBEDTLS_LIBRARIES "${MBEDTLS_LIBRARIES}")
 
-find_package(OZKS 0.1.0 REQUIRED)
+find_package(OZKS 0.2.0 REQUIRED)
 
 find_package(Flatbuffers REQUIRED)
 find_package(Microsoft.GSL 3 REQUIRED)
