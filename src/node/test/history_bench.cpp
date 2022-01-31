@@ -142,6 +142,52 @@ static void append_compact(picobench::state& s)
   s.stop_timer();
 }
 
+template <size_t S>
+static void query_history(picobench::state& s)
+{
+  ::srand(43);
+
+  kv::Store store;
+  auto kp = crypto::make_key_pair();
+  std::shared_ptr<kv::Consensus> consensus = std::make_shared<DummyConsensus>();
+  store.set_consensus(consensus);
+
+  std::shared_ptr<kv::TxHistory> history = std::make_shared<ccf::MerkleTxHistory>(store, kv::test::PrimaryNodeId, *kp);
+  store.set_history(history);
+
+  std::vector<std::vector<uint8_t>> txs;
+  for (size_t i = 0; i < s.iterations(); i++)
+  {
+    std::vector<uint8_t> tx;
+    for (size_t j = 0; j < S; j++)
+    {
+      tx.push_back(::rand() % 256);
+    }
+    txs.push_back(tx);
+  }
+
+  size_t idx = 0;
+  for (auto _ : s) 
+  {
+    (void)_;
+    history->append(txs[idx++]);
+    clobber_memory();
+  }
+
+  s.start_timer();
+  for (auto _ : s)
+  {
+    (void)_;
+    auto proof = history->get_proof(0);
+    bool proof_result = history->verify_proof(proof);
+    if (!proof_result)
+    {
+      std::cout << "verify_proof failed." << std::endl;
+    }
+  }
+  s.stop_timer();
+}
+
 const std::vector<int> sizes = {1000, 10000};
 
 PICOBENCH_SUITE("hash_only");
@@ -158,6 +204,9 @@ PICOBENCH_SUITE("append_compact");
 PICOBENCH(append_compact<10>).iterations(sizes).samples(10).baseline();
 PICOBENCH(append_compact<100>).iterations(sizes).samples(10);
 PICOBENCH(append_compact<1000>).iterations(sizes).samples(10);
+
+PICOBENCH_SUITE("query_history");
+PICOBENCH(query_history<1000>).iterations(sizes).samples(10);
 
 int main(int argc, char* argv[])
 {
